@@ -4,14 +4,20 @@ import { StyleSheet, Text, View, ScrollView, Platform, TextInput, Image } from '
 import * as Location from 'expo-location';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import { Styles } from "./Styles/SearchBarStyle";
 import icons from './Data/Icons';
 
 // Components
 import UseFonts  from './Components/Fonts';
 import Header from './Components/Header';
+import SearchBar from './Components/SearchBar';
 import TemperatureContainer from './Components/TemperatureContainer';
-import TemperatureChart from './Components/TemperatureChart';
+import TemperatureGestureChart from './Components/TemperatureGestureChart';
+import TemperatureLineChart from './Components/TemperatureChart';
+import Forecast from './Components/Forecast';
+import TemperatureButtons from './Components/TemperatureButttons';
+import TemperatureBarChart from './Components/TemperatureBarChart';
+import WeatherDetails from './Components/WeatherDetails';
+import getThemeColor from './Data/ThemeColor';
 
 const App = () => {
 
@@ -19,24 +25,35 @@ const App = () => {
   const [temperature, setTemperature] = useState(null);
   const [weatherStatus, setCondition] = useState(null);
   const [coords, setCoords] = useState(null);
-  const [autocompleteValue, setAutocompleteValue] = useState('');
   const [changeSearchBar, setChangeSearchBar] = useState("#444");
   const [hourlyTemp, setHourlyTemp] = useState(false);
   const [hourlyWind, setHourlyWind] = useState(false);
+  const [todayHoursFullyDate, setTodayHoursFullyDate] = useState([]);
   const [todayHoursDateData, setTodayHoursDateData] = useState([]);
+  const [todayHoursFullyTempData, setTodayHoursFullyTempData] = useState([]);
+  const [todayHoursIcon, setTodayHoursIcon] = useState([]);
   const [todayHoursTempData, setTodayHoursTempData] = useState([]);
   const [todayHoursWindData, setTodayHoursWindData] = useState([]);
+  const [todayHoursWindDeg, setTodayHoursWindDeg] = useState([]);
+  const [todayWind, setTodayWind] = useState(null);
+  const [todayWindDeg, setTodayWindDeg] = useState(null);
+  const [todayWindDir, setTodayWindDir] = useState(null);
+  const [todayPrecip, setTodayPrecip] = useState(null);
+  const [todayTempFeels, setTodayTempFeels] = useState(null);
+  const [todaySunrise, setTodaySunrise] = useState(null);
+  const [todaySunset, setTodaySunset] = useState(null);
+  const [todayUV, setTodayUV] = useState(null);
+  const [todayHumidity, setTodayHumidity] = useState(null);
+  const [todayVisibility, setTodayVisibility] = useState(null);
+  const [airQuality, setAirQuality] = useState(null);
+  const [airQualityCO2, setAirQualityCO2] = useState(null);
   const [isDay, setIsDay] = useState(true);
-
-  const ref = useRef();
-
-  const stylesSearchBar = Styles("#444");
-
-  useEffect(() => {
-      ref.current?.setAddressText();
-  }, []);
+  const [dailyData, setDailyData] = useState(null);
+  const [forecastTempGesture, setForecastTempGesture] = useState(true);
+  const [forecastTempBar, setForecastTempBar] = useState(null);
+  const [forecastTempLine, setForecastTempLine] = useState(null);
   
-  const API_URL = 'http://192.168.1.2:5001';
+  const API_URL = 'http://192.168.1.7:5001';
   const [loaded] = UseFonts();
 
   const styles = StyleSheet.create({
@@ -44,42 +61,48 @@ const App = () => {
       width: "100%",
       maxWidth: "100%",
       height: Platform.OS === "web" ? "100vh" : "100%",
-      backgroundColor: "rgb(10,10,10)",
+      backgroundColor: "rgb(14,14,14)",
       flex: 1,
       zIndex: 1
     },  
   });
 
-  const getCoords = async () => {
+  const geoSuccess = (location) => {
+    const latitude = location.coords.latitude;
+    const longitude = location.coords.longitude;
 
-    try {
-
-      const permission = await Location.requestForegroundPermissionsAsync();
-      const location = await Location.getCurrentPositionAsync({});
-     
-      const latitude = location.coords.latitude;
-      const longitude = location.coords.longitude;
-
-      const data = {
-          latitude: latitude,
-          longitude: longitude
-      }; 
-
-      setCoords(data);
-    } catch (e) {
-      console.warn(e);
-    }
-
-    
+    const coords = {
+        latitude: latitude,
+        longitude: longitude
+    }; 
+    console.warn('access of location'); 
+    getTemperature(coords, true);
   };
 
-  const getTemperature = async () => {
+  const geoFailure = (err) => {
+    console.err(err);
+  }
+
+  const getCoords = () => {
+
+    const geoOptions = {
+      enableHighAccuracy: true,
+      timeOut: 5,
+      maximumAge: 60 *  24
+    };
+    
+    Location.installWebGeolocationPolyfill();
+    navigator.geolocation.getCurrentPosition(geoSuccess, geoFailure, geoOptions);
+  };
+
+  const getTemperature = async (coords, effect=false) => {
+    
     const options = {
       method: "POST",
       body: JSON.stringify(coords),
       headers: {
         'Content-Type': 'application/json',
-      },
+      }
     };
 
     const serverReq = await fetch(`${API_URL}/weather`, options);
@@ -91,20 +114,32 @@ const App = () => {
     const location = `${await data.location.region}, ${await data.location.country}`;
     const forecasts = await data.forecast.forecastday;
     const is_day = await data.current.is_day;
-    console.log(await is_day);
-
+    const currentWind = await data.current.wind_kph;
+    const currentWindDeg = await data.currentwind_degree;
+    const currentWindDir = await data.current.wind_dir;
+    const tempFeelsLike = await data.current.feelslike_c;
+    const humidity = await data.current.humidity;
+    const visibility = await data.current.vis_km;
+    const UV = await data.current.uv;
+    const precip = await data.current.precip_mm;
+    const airQualityData = await data.current.air_quality["pm10"];
+    const airQualityCO2Data = await data.current.air_quality["co"];
+    console.log(await airQualityCO2Data);
     const currLocalTime = await locationData.localtime.split(" ")[0];
     const currDate = new Date();
     const currentHour = currDate.getHours();
-    console.log(currLocalTime);
+    const minHour = currentHour - 2;
+    
     let dailyData = [],
         todayHoursDate = [],
         todayHours = [],
         todayHoursTemp = [],
         evenHourStamp,
-        todayHoursWind = [];
-
-    console.log(await data);
+        todayHoursWind = [],
+        todayFullyHoursTemp = [],
+        todayFullyHoursDate = [],
+        todayFullyHoursIcon = [],
+        todayHoursWindDeg = []; 
 
     forecasts.forEach(day => {
       const dayData = day;
@@ -125,11 +160,14 @@ const App = () => {
     
       if (day.date === currLocalTime) {
           hourlyStatusWeather.forEach(hourData => {
+              
               const hourDate = new Date(hourData.time);
               const hourTime = hourDate.getHours();
-              const hourString = hourTime === 0 ? "12 AM" : hourTime < 12 ? `${hourTime} AM` : `${parseInt(hourTime) - 12} PM`;
-              
-              if (hourTime === currentHour) {
+              const hour = hourTime < 10 ? `0${hourTime}` : hourTime.toString();
+              const hourString = hourTime === 0 ? "12 AM": hourTime === 12 ? "12 PM" : hourTime < 12 ? `${hourTime} AM` : `${parseInt(hourTime) - 12} PM`;
+              const condition = hourData.condition.text.toLowerCase().replaceAll(" ", "_");
+             
+              if (hourTime === minHour) {
                   const thisTemp = Math.round(hourData.temp_c);
                   const thisWind = Math.round(hourData.wind_kph);
                   evenHourStamp = currentHour % 2;
@@ -137,21 +175,43 @@ const App = () => {
                   todayHoursTemp.push(thisTemp);
                   todayHoursDate.push(hourData.time);
                   todayHoursWind.push(thisWind);
+                  todayHoursWindDeg.push(hourData.wind_degree);
                   
-              } else if (hourTime > currentHour && evenHourStamp === hourTime % 2) {
+              } else if (hourTime > minHour) {
+                  if (hourTime >= currentHour) {
+                    todayFullyHoursTemp.push(Math.round(hourData.temp_c));
+                    todayFullyHoursDate.push(hour);
+                    todayFullyHoursIcon.push(condition);
+                  }
+                  
+                  if (evenHourStamp !== hourTime % 2) return;
                   const thisTemp = Math.round(hourData.temp_c);
                   const thisWind = Math.round(hourData.wind_kph);
                   todayHours.push(hourString);
                   todayHoursTemp.push(thisTemp);
                   todayHoursDate.push(hourData.time);
                   todayHoursWind.push(thisWind);
-              }                
+                  todayHoursWindDeg.push(hourData.wind_degree);
+              }              
           }); 
+
+         setTodaySunrise(day.astro.sunrise);
+         setTodaySunset(day.astro.sunset);
       } else {
           hourlyStatusWeather.forEach(hourData => {
-              if (todayHours.length >= 12) return;
+
               const hourDate = new Date(hourData.time);
               const hourTime = hourDate.getHours();  
+              const hour = hourTime < 10 ? `0${hourTime}` : hourTime.toString();
+              const condition = hourData.condition.text.toLowerCase().replaceAll(" ", "_");
+              
+              if (todayFullyHoursTemp.length < 24) {
+                todayFullyHoursTemp.push(Math.round(hourData.temp_c));
+                todayFullyHoursDate.push(hour);
+                todayFullyHoursIcon.push(condition);
+              }
+
+              if (todayHours.length > 14) return;
               const hourString = hourTime === 0 ? "12 AM" : hourTime === 12 ? "12 PM" : hourTime < 12 ? `${hourTime} AM` : `${parseInt(hourTime) - 12} PM`;
               
               if (hourTime % 2 === evenHourStamp) {
@@ -161,166 +221,116 @@ const App = () => {
                   todayHoursTemp.push(thisTemp);
                   todayHoursDate.push(hourData.time);
                   todayHoursWind.push(thisWind);
+                  todayHoursWindDeg.push(hourData.wind_degree);
               }
           });
       }
     });
-    
+
+    // forecast component data
     setTodayHoursDateData(todayHours);
     setTodayHoursTempData(todayHoursTemp)
     setTodayHoursWindData(todayHoursWind);
+    setTodayHoursWindDeg(todayHoursWindDeg);
     setTemperature(temp);
     setCondition(condition);
     setCurrentLocation(location);
     setIsDay(is_day);
+    setDailyData(await forecasts);
+    setTodayHoursFullyTempData(todayFullyHoursTemp);
+    setTodayHoursFullyDate(todayFullyHoursDate);
+    setTodayHoursIcon(todayFullyHoursIcon)
 
+    // Set details
+    setTodayPrecip(precip);
+    setTodayWind(currentWind);
+    setTodayWindDeg(currentWindDeg);
+    setTodayWindDir(currentWindDir);
+    setTodayTempFeels(tempFeelsLike);
+    setTodayHumidity(humidity);
+    setTodayVisibility(visibility);
+    setTodayUV(UV);
+    setAirQuality(airQualityData);
+    setAirQualityCO2(airQualityCO2Data);
   };
-
-  const getWeatherData = async (coords) => {
-    const latitude = coords.lat;
-    const longitude = coords.lng;
-    const coordsData = {
-        latitude: latitude,
-        longitude: longitude
-    };
-    const options = {
-        method: 'POST',
-        headers: {
-            'content-type': 'application/json'
-        },
-        body: JSON.stringify(coordsData)
-    }
-
-    const responseJSON = await fetch(`${API_URL}/weather`, options);
-    const response = await responseJSON.json();
-    const data = await response.data;
-    console.log(data);
-    const temperature = await data.current.temp_c;
-    const status = await data.current.condition.text;
-    setTemperature(await temperature);
-    setCondition(await status);
-  };
-
 
   const getLocation = (e) => {
-    
+      
   };
 
   // Effects
-  useEffect(() => {
-    if (coords === null) return;
-    getTemperature();
-  }, [coords]);
 
-  
   useEffect(() => {
-    (async () => {
-      await getCoords();
-    })();
+    getCoords();
   }, []);
 
+  const handleSearchLocation = (data, details) => {
+    console.warn('here');
+    setCurrentLocation(data.description);
+    const coords = {
+      latitude: details.geometry.location.lat,
+      longitude: details.geometry.location.lng
+    };
+
+    getTemperature(coords);
+  };
+
+  const handleDailyData = (forecastData) => {
+    const hoursData = forecastData.hour;
+    let hoursTemp = [], hoursDate = [], hoursWind = [], hoursFullyDate = [], hoursFullyTemp = [];
+
+    hoursData.forEach((hour, idx) => {
+      const hourTime = new Date(hour.time).getHours();
+      hoursFullyTemp.push(Math.round(hour.temp_c));
+      hoursFullyDate.push(hourTime < 10 ? `0${hourTime}` : hourTime);
+      console.warn(hour);
+      if (idx % 2 !== 0) return;
+      hoursTemp.push(Math.round(hour.temp_c));
+      hoursWind.push(hour.wind_kph);
+    });
+
+    setTodayHoursTempData(hoursTemp);
+    setTodayHoursWindData(hoursWind);
+    setTodayHoursFullyTempData(hoursFullyTemp);
+    setTodayHoursFullyDate(hoursFullyDate);
+  };
+
+  const handleForecast = (buttonsArr) => {
+    setForecastTempGesture(buttonsArr[0]);
+    setForecastTempBar(buttonsArr[1]);
+    setForecastTempLine(buttonsArr[2]);
+  }
 
   if (!loaded) return null;
 
-  return (
+  return temperature && weatherStatus && currentLocation && dailyData && (
     <ScrollView style={styles.main} keyboardShouldPersistTaps="always">
-      
-      <View style={stylesSearchBar.searchBarContainer}>
-        <GooglePlacesAutocomplete
-            ref={ref}
-            placeholder='Search'
-            
-            fetchDetails={true}
-            onPress={(data, details = null) => {
-                // 'details' is provided when fetchDetails = true
-                console.log(data.description, details.geometry.location);
-                setCurrentLocation(data.description);
-                getWeatherData(details.geometry.location);
-                setAutocompleteValue('');
-
-            }}
-            query={{
-                key: 'AIzaSyCffhtcZzCpacqM1uAQeL00rHMo0A8ieB0',
-                language: 'en',
-            }}
-
-            requestUrl={{
-                useOnPlatform: 'web', // or "all"
-                url:
-                  'https://cors-anywhere.herokuapp.com/https://maps.googleapis.com/maps/api', // or any proxy server that hits https://maps.googleapis.com/maps/api
-                headers: {
-                  Authorization: `an auth token`, // if required for your proxy
-                },
-            }}
-
-            textInputProps={{
-                onChangeText: (text) => { 
-                  setAutocompleteValue(text);
-                },
-                value: autocompleteValue,
-                placeholderTextColor: "rgb(63,70,86)"
-            }}
-
-            styles={{
-                container: {
-                    
-                    width: "100%",
-                    maxWidth: 400
-                },
-
-                textInputContainer: {
-                    
-                    width: "108%",
-                },
-                textInput: {
-                    height: 50,
-                    color: changeSearchBar,
-                    fontSize: 20,
-                    backgroundColor: 'transparent',
-                    width: "108%",
-                    borderRadius: 32,
-                    borderColor: 'rgb(42,46,51)',
-                    borderWidth: 1,
-                    color: 'rgb(63,70,86)'
-                },
-                predefinedPlacesDescription: {
-                    color: '#fff',
-                    backgroundColor: "#111"
-                },
-
-                listView: {
-                    width: "108%",
-                    
-                },
-
-                row: {
-                    backgroundColor: "#111",
-                    
-                },
-
-                description: {
-                    color: "rgba(255, 255, 255, .9)",
-                },
-
-                poweredContainer: {
-                    transform: [{ scale: 0 }]
-                }
-            }}
-            
-        />
-        <View onClick={(e) => getLocation(e)} style={[stylesSearchBar.searchIconContainer, {transform: [{ translateX: -15}, { translateY: 10 }]}]}>
-            <Icon name="search" size={27} color="rgb(206,209,213)" style={stylesSearchBar.searchIcon} /> 
-        </View>
-      </View>
-      { currentLocation && (<Header location={currentLocation} />) }
-      {temperature && weatherStatus && (<TemperatureContainer temp={Math.round(temperature)} cond={weatherStatus} is_day={isDay}/>)}
-      {currentLocation && weatherStatus && (<TemperatureChart temp={todayHoursTempData} labels={todayHoursDateData} />)}
+      <SearchBar callback={handleSearchLocation} />
+      <Header location={currentLocation} />
+      <TemperatureContainer temp={Math.round(temperature)} cond={weatherStatus} isDay={isDay}/>
+      <Forecast dailyData={dailyData} isDay={isDay} setDailyData={handleDailyData}/>
+      <TemperatureButtons callback={handleForecast} isDay={isDay}/>
+      {forecastTempGesture && <TemperatureGestureChart data={todayHoursFullyTempData} date={todayHoursFullyDate} icon={todayHoursIcon} isDay={isDay} />}
+      {forecastTempBar && <TemperatureBarChart isDay={isDay} data={todayHoursTempData} labels={todayHoursDateData} unit='°' color={getThemeColor(isDay)} percent={10}/>}
+      {forecastTempLine && <TemperatureLineChart temp={todayHoursTempData} labels={todayHoursDateData} isDay={isDay} />}
+      {todayHoursWindData && <TemperatureBarChart data={todayHoursWindData} deg={todayHoursWindDeg} labels={todayHoursDateData} unit=' km' color={["#194f8a", "#4780bf"]} percent={7.5}/>}
+      <WeatherDetails 
+        isDay={isDay}  
+        precip={todayPrecip}
+        wind={todayWind}
+        windDir={todayWindDir}
+        windDeg={todayWindDeg}
+        feelsTemp={todayTempFeels}
+        humidity={todayHumidity}
+        visibility={todayVisibility}
+        sunrise={todaySunrise}
+        sunset={todaySunset}
+        uv={todayUV}
+        airQuality={airQuality}
+        co2={airQualityCO2}
+      />
     </ScrollView>
   );
 }
 
 export default App;
-
-
-
-
