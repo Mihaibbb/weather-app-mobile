@@ -31,21 +31,24 @@ export const styles = StyleSheet.create({
         flex: 1,
         flexDirection: "row",
         justifyContent: "center",
-        alignItems: "flex-start"
+        alignItems: "flex-start",
+        marginLeft: 25
     },
 
     condition: {
         color: "#fff",
-        marginTop: 25,
-        fontSize: 18,
-        fontFamily: "SfProDisplayRegular"
+        marginTop: 20,
+        fontSize: 22,
+        fontFamily: "SfProDisplayRegular",
+
     },
 
-    weatherStatus: {
-        width: 75,
-        height: 75,
+    statusContainer: {
+        width: 115,
+        height: 115,
         position: 'absolute',
         bottom: 0,
+        right: 0,
     },
 
     svgContainer: {
