@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native";
 const styles = StyleSheet.create({
     chartContainer: {
         width: "100%",
-        margin: 20
+        maxWidth: "100%",
         
     },
 
